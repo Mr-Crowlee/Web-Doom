@@ -1,7 +1,9 @@
+<!DOCTYPE html>
 <html lang="en-us">
   <head>
     <meta charset="utf-8">
     <meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
     <title>Web-Doom</title>
     <link rel="icon" type="image/x-icon" href="https://www.iconarchive.com/download/i597/3xhumed/mega-games-pack-26/Doom-The-Ultimate-1.ico">
     <style type="text/css">
@@ -12,9 +14,13 @@
   <body>
     <div id="dosbox" align="center"></div>
     <br/>
-    <button onclick="dosbox.requestFullScreen();">Make fullscreen</button>
-    
+    <button onclick="toggleFullscreen();">Make fullscreen</button>
+
+    <script type="text/javascript" src="https://cdnjs.cloudflare.com/ajax/libs/babel-polyfill/7.12.1/polyfill.min.js"></script>
+    <script type="text/javascript" src="https://cdnjs.cloudflare.com/ajax/libs/es5-shim/4.5.15/es5-shim.min.js"></script>
+    <script type="text/javascript" src="https://cdnjs.cloudflare.com/ajax/libs/es5-shim/4.5.15/es5-sham.min.js"></script>
     <script type="text/javascript" src="https://js-dos.com/cdn/js-dos-api.js"></script>
+
     <script type="text/javascript">
       var dosbox = new Dosbox({
         id: "dosbox",
@@ -22,9 +28,18 @@
           dosbox.run("https://js-dos.com/cdn/upload/DOOM-@evilution.zip", "./DOOM/DOOM.EXE");
         },
         onrun: function (dosbox, app) {
-          console.log("App '" + app + "' is runned");
+          console.log("App '" + app + "' is running");
         }
       });
+
+      function toggleFullscreen() {
+        var el = document.getElementById("dosbox");
+        if (el.msRequestFullscreen) {
+          el.msRequestFullscreen(); // Método do IE para fullscreen
+        } else {
+          alert("Fullscreen não suportado no seu navegador.");
+        }
+      }
     </script>
   </body>
 </html>
