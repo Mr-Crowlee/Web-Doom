@@ -1,43 +1,91 @@
 <!DOCTYPE html>
-<html lang="en-us">
+<html lang="pt-BR">
   <head>
     <meta charset="utf-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=11">
     <meta http-equiv="Content-Type" content="text/html; charset=utf-8">
-    <meta http-equiv="X-UA-Compatible" content="IE=edge">
-    <title>Web-Doom</title>
+    <title>Web-Doom (IE11)</title>
     <link rel="icon" type="image/x-icon" href="https://www.iconarchive.com/download/i597/3xhumed/mega-games-pack-26/Doom-The-Ultimate-1.ico">
     <style type="text/css">
+      body { font-family: Tahoma, Arial, sans-serif; }
       .dosbox-container { width: 640px; height: 400px; }
       .dosbox-container > .dosbox-overlay { background: url(https://js-dos.com/cdn/DOOM.png); }
+      #ie-warning {
+        display: none;
+        max-width: 640px;
+        margin: 0 auto 12px auto;
+        padding: 10px;
+        background: #600;
+        color: #fff;
+      }
     </style>
   </head>
   <body>
+    <div id="ie-warning"></div>
     <div id="dosbox" align="center"></div>
     <br/>
-    <button onclick="toggleFullscreen();">Make fullscreen</button>
+    <div align="center">
+      <button type="button" onclick="toggleFullscreen();">Tela cheia</button>
+      <p>Use HTTP (não abra como arquivo). No IE: a meta IE=11 precisa vencer a vista de compatibilidade (documentMode 11).</p>
+    </div>
 
-    <script type="text/javascript" src="https://cdnjs.cloudflare.com/ajax/libs/babel-polyfill/7.12.1/polyfill.min.js"></script>
-    <script type="text/javascript" src="https://cdnjs.cloudflare.com/ajax/libs/es5-shim/4.5.15/es5-shim.min.js"></script>
-    <script type="text/javascript" src="https://cdnjs.cloudflare.com/ajax/libs/es5-shim/4.5.15/es5-sham.min.js"></script>
-    <script type="text/javascript" src="https://js-dos.com/cdn/js-dos-api.js"></script>
-
+    <script type="text/javascript" src="vendor/ie-shims.js"></script>
+    <script type="text/javascript" src="vendor/js-dos-api.js"></script>
     <script type="text/javascript">
-      var dosbox = new Dosbox({
-        id: "dosbox",
-        onload: function (dosbox) {
-          dosbox.run("https://js-dos.com/cdn/upload/DOOM-@evilution.zip", "./DOOM/DOOM.EXE");
-        },
-        onrun: function (dosbox, app) {
-          console.log("App '" + app + "' is running");
+      (function () {
+        var warn = document.getElementById("ie-warning");
+        var mode = document.documentMode;
+        var ua = navigator.userAgent || "";
+        var compatUa = ua.indexOf("MSIE 7.0") !== -1 && ua.indexOf("Trident/") !== -1;
+
+        if (mode && mode < 10) {
+          warn.style.display = "block";
+          warn.innerHTML =
+            "Este IE está em documentMode " + mode +
+            " (user-agent de compatibilidade). O DOSBox precisa de modo IE10/IE11. " +
+            "Desmarque Exibir sites da Intranet em Modo de Exibição de Compatibilidade " +
+            "e recarregue. Ferramentas &gt; Opções da Internet &gt; Avançado / Compatibilidade.";
+          return;
         }
-      });
+
+        if (compatUa && (!mode || mode >= 10)) {
+          warn.style.display = "block";
+          warn.style.background = "#333";
+          warn.innerHTML =
+            "IE11 em vista de compatibilidade, documentMode " +
+            (mode || "?") +
+            ". Motor Trident 7 com APIs de IE11 — o jogo tenta rodar (sem som).";
+        }
+
+        if (typeof Dosbox === "undefined" || typeof Uint8Array === "undefined") {
+          warn.style.display = "block";
+          warn.innerHTML = "Faltam APIs (Uint8Array/Dosbox). Não é possível iniciar o emulador neste modo.";
+          return;
+        }
+
+        window.dosbox = new Dosbox({
+          id: "dosbox",
+          onload: function (dosbox) {
+            dosbox.run("https://js-dos.com/cdn/upload/DOOM-@evilution.zip", "./DOOM/DOOM.EXE");
+          },
+          onrun: function (dosbox, app) {
+            if (window.console && console.log) {
+              console.log("App '" + app + "' is running");
+            }
+          }
+        });
+      })();
 
       function toggleFullscreen() {
         var el = document.getElementById("dosbox");
-        if (el.msRequestFullscreen) {
-          el.msRequestFullscreen(); // Método do IE para fullscreen
+        var req = el.requestFullscreen || el.msRequestFullscreen ||
+          el.mozRequestFullScreen || el.webkitRequestFullscreen;
+        if (req) {
+          req.call(el);
+        } else if (window.dosbox && dosbox.requestFullScreen) {
+          dosbox.requestFullScreen();
         } else {
-          alert("Fullscreen não suportado no seu navegador.");
+          alert("Tela cheia não suportada neste modo do IE.");
         }
       }
     </script>
