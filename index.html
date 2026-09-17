@@ -26,7 +26,7 @@
     <br/>
     <div align="center">
       <button type="button" onclick="toggleFullscreen();">Tela cheia</button>
-      <p>Use HTTP (nao abra como arquivo). No IE: se a pagina pedir modo de compatibilidade, esta meta IE=11 precisa vencer — documentMode 11.</p>
+      <p>Use HTTP (não abra como arquivo). No IE: a meta IE=11 precisa vencer a vista de compatibilidade (documentMode 11).</p>
     </div>
 
     <script type="text/javascript" src="vendor/ie-shims.js"></script>
@@ -41,10 +41,10 @@
         if (mode && mode < 10) {
           warn.style.display = "block";
           warn.innerHTML =
-            "Este IE esta em documentMode " + mode +
+            "Este IE está em documentMode " + mode +
             " (user-agent de compatibilidade). O DOSBox precisa de modo IE10/IE11. " +
-            "Desmarque Exibir sites da Intranet em Modo de Exibicao de Compatibilidade " +
-            "e recarregue. Ferramentas &gt; Opcoes da Internet &gt; Avancado / Compatibilidade.";
+            "Desmarque Exibir sites da Intranet em Modo de Exibição de Compatibilidade " +
+            "e recarregue. Ferramentas &gt; Opções da Internet &gt; Avançado / Compatibilidade.";
           return;
         }
 
@@ -59,7 +59,7 @@
 
         if (typeof Dosbox === "undefined" || typeof Uint8Array === "undefined") {
           warn.style.display = "block";
-          warn.innerHTML = "Faltam APIs (Uint8Array/Dosbox). Nao e possivel iniciar o emulador neste modo.";
+          warn.innerHTML = "Faltam APIs (Uint8Array/Dosbox). Não é possível iniciar o emulador neste modo.";
           return;
         }
 
@@ -85,7 +85,7 @@
         } else if (window.dosbox && dosbox.requestFullScreen) {
           dosbox.requestFullScreen();
         } else {
-          alert("Tela cheia nao suportada neste modo do IE.");
+          alert("Tela cheia não suportada neste modo do IE.");
         }
       }
     </script>
