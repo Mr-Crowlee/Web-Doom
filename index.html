@@ -26,7 +26,7 @@
     <br/>
     <div align="center">
       <button type="button" onclick="toggleFullscreen();">Tela cheia</button>
-      <p>Use HTTP (não abra como arquivo). No IE: a meta IE=11 precisa vencer a vista de compatibilidade (documentMode 11).</p>
+      <p>Use HTTP com gzip (python serve.py). No IE o clique só libera depois do download; a compilação do DOSBox ainda pode congelar a aba uns 30–90s na primeira vez.</p>
     </div>
 
     <script type="text/javascript" src="vendor/ie-shims.js"></script>
@@ -65,8 +65,10 @@
 
         window.dosbox = new Dosbox({
           id: "dosbox",
+          archiveUrl: "https://js-dos.com/cdn/upload/DOOM-@evilution.zip",
+          executable: "./DOOM/DOOM.EXE",
           onload: function (dosbox) {
-            dosbox.run("https://js-dos.com/cdn/upload/DOOM-@evilution.zip", "./DOOM/DOOM.EXE");
+            dosbox.run();
           },
           onrun: function (dosbox, app) {
             if (window.console && console.log) {
