@@ -51,39 +51,122 @@ function(a,b){jQuery.fn[b]=function(d){return d?this.bind(b,d):this.trigger(b)}}
     function Dosbox(options) {
       this.onload = options.onload;
       this.onrun = options.onrun;
+      this.scriptUrl = options.scriptUrl || 'vendor/js-dos-v3.js';
+      this.archiveUrl = options.archiveUrl;
+      this.executable = options.executable;
+      this.prefetchedScript = null;
+      this.prefetchedZip = null;
+      this.scriptReady = false;
+      this.zipReady = false;
+      this.startRequested = false;
       this.ui = new Dosbox.UI(options);
       this.module = new Dosbox.Module({
         canvas: this.ui.canvas
       });
+      this.module.TOTAL_MEMORY = options.totalMemory || 67108864;
+      this.module.TOTAL_STACK = options.totalStack || 2097152;
+      this.cycles = options.cycles || 10000;
+      this.ui.setStartEnabled(false);
+      this.ui.setPrefetch('Baixando o emulador em segundo plano...');
+      this._prefetchAssets();
       this.ui.onStart((function(_this) {
         return function() {
+          _this.startRequested = true;
           _this.ui.showLoader();
-          return _this.downloadScript();
+          _this.ui.updateMessage('Preparando o IE (uma pintura, depois a compilação)...');
+          return _this._maybeStart();
         };
       })(this));
     }
 
+    Dosbox.prototype._prefetchAssets = function() {
+      var _this = this;
+      new Dosbox.Xhr(this.scriptUrl, {
+        success: function(data) {
+          _this.prefetchedScript = data;
+          _this.scriptReady = true;
+          _this._updatePrefetchUi();
+          _this._maybeStart();
+        },
+        progress: function(total, current) {
+          if (!total) {
+            _this.ui.setPrefetch('Emulador ' + current + ' bytes');
+            return;
+          }
+          _this.ui.setPrefetch('Emulador ' + (current * 100 / total | 0) + '% (' + (current / 1048576).toFixed(1) + ' MB)');
+        }
+      });
+      if (this.archiveUrl) {
+        new Dosbox.Xhr(this.archiveUrl, {
+          success: function(data) {
+            _this.prefetchedZip = data;
+            _this.zipReady = true;
+            _this._updatePrefetchUi();
+            _this._maybeStart();
+          },
+          progress: function(total, current) {
+            if (!_this.scriptReady) {
+              return;
+            }
+            _this.ui.setPrefetch('DOOM.ZIP ' + (current * 100 / total | 0) + '%');
+          }
+        });
+      } else {
+        this.zipReady = true;
+      }
+    };
+
+    Dosbox.prototype._updatePrefetchUi = function() {
+      if (this.scriptReady && this.zipReady) {
+        this.ui.setPrefetch('Download pronto. Clique para iniciar.');
+        this.ui.setStartEnabled(true);
+      }
+    };
+
+    Dosbox.prototype._maybeStart = function() {
+      var _this = this;
+      if (!this.startRequested || !this.scriptReady || !this.zipReady) {
+        return;
+      }
+      this.startRequested = false;
+      this.ui.updateMessage('O IE11 vai compilar ~5 MB de JS e pode congelar 30-90s. Nao feche a aba.');
+      window.setTimeout(function() {
+        _this.downloadScript();
+      }, 400);
+    };
+
     Dosbox.prototype.run = function(archiveUrl, executable) {
-      return new Dosbox.Mount(this.module, archiveUrl, {
-        success: (function(_this) {
-          return function() {
-            var func, hide;
-            _this.ui.updateMessage("Launching " + executable);
-            hide = function() {
-              return _this.ui.hideLoader();
-            };
-            func = function() {
-              return _this._dosbox_main(_this, executable);
-            };
-            setTimeout(func, 1000);
-            return setTimeout(hide, 3000);
-          };
-        })(this),
-        progress: (function(_this) {
-          return function(total, current) {
-            return _this.ui.updateMessage("Mount " + executable + " (" + (current * 100 / total | 0) + "%)");
-          };
-        })(this)
+      var _this = this;
+      if (archiveUrl) {
+        this.archiveUrl = archiveUrl;
+      }
+      if (executable) {
+        this.executable = executable;
+      }
+      function afterMount() {
+        _this.ui.updateMessage('Launching ' + _this.executable);
+        window.setTimeout(function() {
+          _this._writeDosboxConf();
+          _this._dosbox_main(_this, _this.executable);
+          window.setTimeout(function() {
+            _this.ui.hideLoader();
+            _this._captureInput();
+          }, 800);
+        }, 200);
+      }
+      if (this.prefetchedZip) {
+        this.ui.updateMessage('Montando ZIP (cópia em pedaços)...');
+        return new Dosbox.Mount(this.module, null, {
+          bytes: this.prefetchedZip,
+          success: afterMount,
+          progress: function() {}
+        });
+      }
+      return new Dosbox.Mount(this.module, this.archiveUrl, {
+        success: afterMount,
+        progress: function(total, current) {
+          _this.ui.updateMessage('Mount ' + _this.executable + ' (' + (current * 100 / total | 0) + '%)');
+        }
       });
     };
 
@@ -97,22 +180,35 @@ function(a,b){jQuery.fn[b]=function(d){return d?this.bind(b,d):this.trigger(b)}}
       var done, head, script, _this;
       _this = this;
       this.module.setStatus('Downloading js-dos');
-      this.ui.updateMessage('Downloading js-dos');
+      this.ui.updateMessage('Compilando DOSBox no Chakra...');
+      this._blockWebGL(this.module.canvas);
       window.Module = this.module;
       done = false;
       script = document.createElement('script');
       script.charset = 'utf-8';
       script.type = 'text/javascript';
-      script.src = 'vendor/js-dos-v3.js';
+      if (this.prefetchedScript && window.URL && URL.createObjectURL && window.Blob) {
+        try {
+          script.src = URL.createObjectURL(new Blob([this.prefetchedScript], {
+            type: 'text/javascript'
+          }));
+        } catch (blobErr) {
+          script.src = this.scriptUrl;
+        }
+      } else {
+        script.src = this.scriptUrl;
+      }
       script.onload = function() {
         if (done) {
           return;
         }
         done = true;
-        _this.ui.updateMessage('Initializing dosbox');
-        if (_this.onload) {
-          _this.onload(_this);
-        }
+        _this.ui.updateMessage('DOSBox compilado. Montando o jogo...');
+        window.setTimeout(function() {
+          if (_this.onload) {
+            _this.onload(_this);
+          }
+        }, 100);
       };
       script.onerror = function() {
         _this.ui.updateMessage('Falha ao carregar vendor/js-dos-v3.js');
@@ -129,6 +225,128 @@ function(a,b){jQuery.fn[b]=function(d){return d?this.bind(b,d):this.trigger(b)}}
       };
       head = document.head || document.getElementsByTagName('head')[0];
       return head.appendChild(script);
+    };
+
+    Dosbox.prototype._captureInput = function() {
+      var canvas, trap;
+      canvas = this.module.canvas;
+      if (canvas) {
+        canvas.tabIndex = 0;
+        try {
+          canvas.focus();
+        } catch (ignore) {}
+      }
+      trap = function(e) {
+        var k;
+        e = e || window.event;
+        k = e.keyCode || e.which;
+        if (k === 8 || k === 9 || k === 32 || (k >= 33 && k <= 40)) {
+          if (e.preventDefault) {
+            e.preventDefault();
+          }
+          e.returnValue = false;
+          return false;
+        }
+      };
+      if (document.addEventListener) {
+        document.addEventListener('keydown', trap, false);
+      } else if (document.attachEvent) {
+        document.attachEvent('onkeydown', trap);
+      }
+    };
+
+    Dosbox.prototype._blockWebGL = function(canvas) {
+      var original;
+      if (!canvas || canvas._ieBlockWebGL) {
+        return;
+      }
+      original = canvas.getContext;
+      if (typeof original !== 'function') {
+        return;
+      }
+      canvas._ieBlockWebGL = true;
+      canvas.getContext = function(type, attrs) {
+        var t;
+        t = String(type || '').toLowerCase();
+        if (t.indexOf('webgl') !== -1) {
+          return null;
+        }
+        return original.call(canvas, type, attrs);
+      };
+    };
+
+    Dosbox.prototype._writeDosboxConf = function() {
+      var FS, conf;
+      FS = this.module.FS || window.FS;
+      if (!FS || typeof FS.writeFile !== 'function') {
+        return;
+      }
+      conf = [
+        '[sdl]',
+        'fullscreen=false',
+        'fulldouble=false',
+        'output=surface',
+        'autolock=false',
+        'sensitivity=100',
+        'usescancodes=true',
+        'waitonerror=false',
+        'priority=normal,normal',
+        '',
+        '[dosbox]',
+        'machine=svga_s3',
+        'memsize=16',
+        '',
+        '[render]',
+        'frameskip=0',
+        'aspect=false',
+        'scaler=none',
+        '',
+        '[cpu]',
+        'core=normal',
+        'cputype=auto',
+        'cycles=' + (this.cycles || 10000),
+        'cycleup=500',
+        'cycledown=500',
+        '',
+        '[mixer]',
+        'nosound=true',
+        'rate=11025',
+        'blocksize=2048',
+        '',
+        '[midi]',
+        'mpu401=none',
+        'mididevice=none',
+        '',
+        '[sblaster]',
+        'sbtype=none',
+        '',
+        '[gus]',
+        'gus=false',
+        '',
+        '[speaker]',
+        'pcspeaker=false',
+        'tandy=off',
+        'disney=false',
+        ''
+      ].join('\n');
+      function mkdir(path) {
+        try {
+          FS.mkdir(path);
+        } catch (ignore) {}
+      }
+      mkdir('/home');
+      mkdir('/home/web_user');
+      mkdir('/home/web_user/.dosbox');
+      try {
+        FS.writeFile('/home/web_user/.dosbox/dosbox-SVN.conf', conf);
+        if (typeof console !== 'undefined' && console.log) {
+          console.log('Wrote IE dosbox.conf (cycles=' + (this.cycles || 10000) + ', nosound)');
+        }
+      } catch (err) {
+        if (typeof console !== 'undefined' && console.error) {
+          console.error('dosbox.conf', err);
+        }
+      }
     };
 
     Dosbox.prototype._dosbox_main = function(dosbox, executable) {
@@ -201,30 +419,48 @@ function(a,b){jQuery.fn[b]=function(d){return d?this.bind(b,d):this.trigger(b)}}
 (function() {
   Dosbox.Mount = (function() {
     function Mount(module, url, options) {
+      var _this = this;
       this.module = module;
+      function gotBytes(data) {
+        var bytes = _this._toArray(data);
+        _this._mountZip(bytes, function(ok) {
+          if (ok) {
+            options.success();
+          } else if (typeof console !== 'undefined' && console.error) {
+            console.error('Unable to mount', url);
+          }
+        });
+      }
+      if (options.bytes) {
+        gotBytes(options.bytes);
+        return;
+      }
       new Dosbox.Xhr(url, {
-        success: (function(_this) {
-          return function(data) {
-            var bytes;
-            bytes = _this._toArray(data);
-            if (_this._mountZip(bytes)) {
-              return options.success();
-            } else {
-              return typeof console !== "undefined" && console !== null ? typeof console.error === "function" ? console.error('Unable to mount', url) : void 0 : void 0;
-            }
-          };
-        })(this),
+        success: gotBytes,
         progress: options.progress
       });
     }
 
-    Mount.prototype._mountZip = function(bytes) {
-      var buffer, extracted;
-      buffer = this.module._malloc(bytes.length);
-      this.module.HEAPU8.set(bytes, buffer);
-      extracted = this.module.ccall('extract_zip', 'int', ['number', 'number'], [buffer, bytes.length]);
-      this.module._free(buffer);
-      return extracted === 0;
+    Mount.prototype._mountZip = function(bytes, done) {
+      var CHUNK, buffer, module, pos;
+      module = this.module;
+      buffer = module._malloc(bytes.length);
+      pos = 0;
+      CHUNK = 256 * 1024;
+      function copyMore() {
+        var end, extracted;
+        end = Math.min(pos + CHUNK, bytes.length);
+        module.HEAPU8.set(bytes.subarray(pos, end), buffer + pos);
+        pos = end;
+        if (pos < bytes.length) {
+          window.setTimeout(copyMore, 0);
+          return;
+        }
+        extracted = module.ccall('extract_zip', 'int', ['number', 'number'], [buffer, bytes.length]);
+        module._free(buffer);
+        done(extracted === 0);
+      }
+      copyMore();
     };
 
     Mount.prototype._toArray = function(data) {
@@ -275,17 +511,23 @@ function(a,b){jQuery.fn[b]=function(d){return d?this.bind(b,d):this.trigger(b)}}
       this.loaderMessage = $('<div class="dosbox-loader-message">');
       this.loader = $('<div class="dosbox-loader">').append($('<div class="st-loader">').append($('<span class="equal">'))).append(this.loaderMessage);
       this.start = $('<div class="dosbox-start">Click to start');
+      this.startEnabled = false;
       this.div.append(this.wrapper);
       this.wrapper.append(this.canvas);
       this.wrapper.append(this.loader);
       this.wrapper.append(this.overlay);
+      this.prefetchStatus = $('<div class="dosbox-prefetch">');
       this.overlay.append($('<div class="dosbox-powered">Powered by &nbsp;').append($('<a href="http://js-dos.com">js-dos.com')));
       this.overlay.append(this.start);
+      this.overlay.append(this.prefetchStatus);
     }
 
     UI.prototype.onStart = function(fun) {
       return this.start.click((function(_this) {
         return function() {
+          if (!_this.startEnabled) {
+            return;
+          }
           fun();
           return _this.overlay.hide();
         };
@@ -318,7 +560,22 @@ function(a,b){jQuery.fn[b]=function(d){return d?this.bind(b,d):this.trigger(b)}}
       return this.loader.hide();
     };
 
-    UI.prototype.css = '.dosbox-container { position: relative; min-width: 320px; min-height: 200px; } .dosbox-canvas { } .dosbox-overlay, .dosbox-loader { position: absolute; left: 0; right: 0; top: 0; bottom: 0; background-color: #333; } .dosbox-start { text-align: center; position: absolute; left: 0; right: 0; bottom: 50%; color: #f80; font-size: 1.5em; text-decoration: underline; cursor: pointer; } .dosbox-overlay a { color: #f80; } .dosbox-loader { display: none; } .dosbox-powered { position: absolute; right: 1em; bottom: 1em; font-size: 0.8em; color: #9C9C9C; } .dosbox-loader-message { text-align: center; position: absolute; left: 0; right: 0; bottom: 50%; margin: 0 0 -3em 0; box-sizing: border-box; color: #f80; font-size: 1.5em; } @-moz-keyframes loading { 0% { left: 0; } 50% { left: 8.33333em; } 100% { left: 0; } } @-webkit-keyframes loading { 0% { left: 0; } 50% { left: 8.33333em; } 100% { left: 0; } } @keyframes loading { 0% { left: 0; } 50% { left: 8.33333em; } 100% { left: 0; } } .st-loader { width: 10em; height: 2.5em; position: absolute; top: 50%; left: 50%; margin: -1.25em 0 0 -5em; box-sizing: border-box; } .st-loader:before, .st-loader:after { content: ""; display: block; position: absolute; top: 0; bottom: 0; width: 1.25em; box-sizing: border-box; border: 0.25em solid #f80; } .st-loader:before { left: -0.76923em; border-right: 0; } .st-loader:after { right: -0.76923em; border-left: 0; } .st-loader .equal { display: block; position: absolute; top: 50%; margin-top: -0.5em; left: 4.16667em; height: 1em; width: 1.66667em; border: 0.25em solid #f80; box-sizing: border-box; border-width: 0.25em 0; -moz-animation: loading 1.5s infinite ease-in-out; -webkit-animation: loading 1.5s infinite ease-in-out; animation: loading 1.5s infinite ease-in-out; }';
+    UI.prototype.setPrefetch = function(message) {
+      return this.prefetchStatus.html(message);
+    };
+
+    UI.prototype.setStartEnabled = function(on) {
+      var el;
+      el = this.start[0];
+      if (!el) {
+        return;
+      }
+      el.style.opacity = on ? '1' : '0.4';
+      el.style.cursor = on ? 'pointer' : 'wait';
+      this.startEnabled = !!on;
+    };
+
+    UI.prototype.css = '.dosbox-container { position: relative; min-width: 320px; min-height: 200px; } .dosbox-canvas { } .dosbox-overlay, .dosbox-loader { position: absolute; left: 0; right: 0; top: 0; bottom: 0; background-color: #333; } .dosbox-start { text-align: center; position: absolute; left: 0; right: 0; bottom: 50%; color: #f80; font-size: 1.5em; text-decoration: underline; cursor: pointer; } .dosbox-prefetch { text-align: center; position: absolute; left: 0; right: 0; bottom: 22%; color: #ccc; font-size: 0.95em; padding: 0 1em; } .dosbox-overlay a { color: #f80; } .dosbox-loader { display: none; } .dosbox-powered { position: absolute; right: 1em; bottom: 1em; font-size: 0.8em; color: #9C9C9C; } .dosbox-loader-message { text-align: center; position: absolute; left: 0; right: 0; bottom: 50%; margin: 0 0 -3em 0; box-sizing: border-box; color: #f80; font-size: 1.5em; } @-moz-keyframes loading { 0% { left: 0; } 50% { left: 8.33333em; } 100% { left: 0; } } @-webkit-keyframes loading { 0% { left: 0; } 50% { left: 8.33333em; } 100% { left: 0; } } @keyframes loading { 0% { left: 0; } 50% { left: 8.33333em; } 100% { left: 0; } } .st-loader { width: 10em; height: 2.5em; position: absolute; top: 50%; left: 50%; margin: -1.25em 0 0 -5em; box-sizing: border-box; } .st-loader:before, .st-loader:after { content: ""; display: block; position: absolute; top: 0; bottom: 0; width: 1.25em; box-sizing: border-box; border: 0.25em solid #f80; } .st-loader:before { left: -0.76923em; border-right: 0; } .st-loader:after { right: -0.76923em; border-left: 0; } .st-loader .equal { display: block; position: absolute; top: 50%; margin-top: -0.5em; left: 4.16667em; height: 1em; width: 1.66667em; border: 0.25em solid #f80; box-sizing: border-box; border-width: 0.25em 0; -moz-animation: loading 1.5s infinite ease-in-out; -webkit-animation: loading 1.5s infinite ease-in-out; animation: loading 1.5s infinite ease-in-out; }';
 
     return UI;
 

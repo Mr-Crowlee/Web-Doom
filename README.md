@@ -1,33 +1,40 @@
 # Web-Doom
 
-The Ultimate Doom (1995) no navegador, via js-dos v3 (DOSBox em asm.js).
+The Ultimate Doom (1995) no navegador, via js-dos v3 (DOSBox em asm.js), pensado para **IE11**.
 
-## Internet Explorer 11
+## Por que o IE11 trava
 
-O alvo é o IE11, inclusive com user-agent de compatibilidade:
+O user-agent `MSIE 7.0; Trident/7.0` é IE11 em vista de compatibilidade. O Chakra **não acelera asm.js** e ainda assim precisa parsear **uma função de ~5 MB** (`vendor/js-dos-v3.js`) na thread da UI, além de alocar o heap do Emscripten.
 
-`Mozilla/4.0 (compatible; MSIE 7.0; Windows NT 6.2; WOW64; Trident/7.0; ...)`
+Isso não é “download lento”: a aba congela na **compilação**. Não dá para fatiar essa função sem recompilar o DOSBox.
 
-Isso é **IE11 (Trident/7)** fingindo IE7. A página manda `X-UA-Compatible: IE=11` para subir o `documentMode` para 11. Sem isso não há canvas utilizável nem typed arrays.
+## O que já fizemos (sem recompilar)
 
-O que funciona nesse IE:
+- Prefetch do JS e do ZIP **antes** do clique, com progresso no overlay
+- Heap de **64 MB** em vez de 128 MB
+- Um `setTimeout` para a mensagem “vai congelar” pintar **antes** da compilação
+- Cópia do ZIP para o HEAP em pedaços de 256 KB (o `extract_zip` em C ainda é um bloco só)
+- `serve.py` / `web.config`: gzip + `X-UA-Compatible: IE=11` + cache
+- Depois do `HU_Init`, o DOSBox ia a `cycles=max` no loop gráfico e o IE parava de responder. Agora grava `dosbox-SVN.conf` com `cycles=10000` (antes 3000, o jogo ficava em câmara lenta e os comandos atrasavam), `nosound=true` e o canvas recusa WebGL. Setas não rolam a página. `?cycles=8000` se travar; Ctrl+F12 / Ctrl+F11 no jogo.
 
-- Render em canvas 2D / asm.js (sem WebAssembly)
-- Teclado e o ZIP do DOOM via `XMLHttpRequest` + `arraybuffer`
-
-O que não existe no IE11:
-
-- Web Audio — o jogo sobe **mudo**
-- `overrideMimeType` — o loader antigo quebrava; agora usa `arraybuffer`
+A segunda visita, com JS em cache, costuma ser bem melhor. O jogo fica mais lento (CPU capado) para a aba continuar viva.
 
 ## Como abrir
 
-Sirva a pasta por HTTP (o IE bloqueia ZIP em `file://`):
-
 ```
-python -m http.server 8000
+python serve.py
 ```
 
-Se a faixa vermelha disser `documentMode 7`, desligue a Vista de Compatibilidade / Enterprise Mode para este site e recarregue.
+Abra `http://127.0.0.1:8000/`. Espere “Download pronto”, depois clique. Na primeira compilação o IE pode ficar 30–90s sem responder — não feche a aba.
 
-Não é necessário recompilar o DOSBox: `vendor/js-dos-v3.js` já é o asm.js do js-dos v3. Recompile só se trocar o binário do Emscripten (`WASM=0`).
+Jogo **mudo** (IE11 não tem Web Audio).
+
+## O que recompilar mudaria (próximo passo, se ainda travar)
+
+Só um binário menor muda o tempo de parse de verdade:
+
+1. **doomgeneric / Chocolate Doom** no Emscripten antigo (`WASM=0`, canvas 2D) — sem emular um PC inteiro; JS bem menor.
+2. DOSBox com `--proxy-to-worker` — o parse iria para um Worker (IE11 tem Worker; não tem OffscreenCanvas, o Emscripten proxy manda o framebuffer por `postMessage`).
+3. Emterpreter (`dosbox-emterp`) — arranque às vezes menos brutal, runtime mais lento.
+
+Enquanto o motor for o DOSBox asm.js de 5 MB, o freeze da primeira compilação no Chakra é esperado.
