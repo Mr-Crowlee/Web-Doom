@@ -145,6 +145,7 @@ function(a,b){jQuery.fn[b]=function(d){return d?this.bind(b,d):this.trigger(b)}}
       function afterMount() {
         _this.ui.updateMessage('Launching ' + _this.executable);
         window.setTimeout(function() {
+          _this._writeDosboxConf();
           _this._dosbox_main(_this, _this.executable);
           window.setTimeout(function() {
             _this.ui.hideLoader();
@@ -178,6 +179,7 @@ function(a,b){jQuery.fn[b]=function(d){return d?this.bind(b,d):this.trigger(b)}}
       _this = this;
       this.module.setStatus('Downloading js-dos');
       this.ui.updateMessage('Compilando DOSBox no Chakra...');
+      this._blockWebGL(this.module.canvas);
       window.Module = this.module;
       done = false;
       script = document.createElement('script');
@@ -221,6 +223,97 @@ function(a,b){jQuery.fn[b]=function(d){return d?this.bind(b,d):this.trigger(b)}}
       };
       head = document.head || document.getElementsByTagName('head')[0];
       return head.appendChild(script);
+    };
+
+    Dosbox.prototype._blockWebGL = function(canvas) {
+      var original;
+      if (!canvas || canvas._ieBlockWebGL) {
+        return;
+      }
+      original = canvas.getContext;
+      if (typeof original !== 'function') {
+        return;
+      }
+      canvas._ieBlockWebGL = true;
+      canvas.getContext = function(type, attrs) {
+        var t;
+        t = String(type || '').toLowerCase();
+        if (t.indexOf('webgl') !== -1) {
+          return null;
+        }
+        return original.call(canvas, type, attrs);
+      };
+    };
+
+    Dosbox.prototype._writeDosboxConf = function() {
+      var FS, conf;
+      FS = this.module.FS || window.FS;
+      if (!FS || typeof FS.writeFile !== 'function') {
+        return;
+      }
+      conf = [
+        '[sdl]',
+        'fullscreen=false',
+        'fulldouble=false',
+        'output=surface',
+        'autolock=false',
+        'sensitivity=100',
+        'waitonerror=false',
+        'priority=lower,lower',
+        '',
+        '[dosbox]',
+        'machine=svga_s3',
+        'memsize=16',
+        '',
+        '[render]',
+        'frameskip=2',
+        'aspect=false',
+        'scaler=none',
+        '',
+        '[cpu]',
+        'core=normal',
+        'cputype=auto',
+        'cycles=3000',
+        '',
+        '[mixer]',
+        'nosound=true',
+        'rate=11025',
+        'blocksize=2048',
+        '',
+        '[midi]',
+        'mpu401=none',
+        'mididevice=none',
+        '',
+        '[sblaster]',
+        'sbtype=none',
+        '',
+        '[gus]',
+        'gus=false',
+        '',
+        '[speaker]',
+        'pcspeaker=false',
+        'tandy=off',
+        'disney=false',
+        ''
+      ].join('\n');
+      function mkdir(path) {
+        try {
+          FS.mkdir(path);
+        } catch (ignore) {}
+      }
+      mkdir('/home');
+      mkdir('/home/web_user');
+      mkdir('/home/web_user/.dosbox');
+      try {
+        FS.writeFile('/home/web_user/.dosbox/dosbox-SVN.conf', conf);
+        if (typeof console !== 'undefined' && console.log) {
+          console.log('Wrote IE dosbox.conf (cycles=3000, nosound)');
+        }
+      } catch (err) {
+        if (typeof console !== 'undefined' && console.error) {
+          console.error('dosbox.conf', err);
+        }
+      }
     };
 
     Dosbox.prototype._dosbox_main = function(dosbox, executable) {

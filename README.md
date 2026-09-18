@@ -15,8 +15,9 @@ Isso não é “download lento”: a aba congela na **compilação**. Não dá p
 - Um `setTimeout` para a mensagem “vai congelar” pintar **antes** da compilação
 - Cópia do ZIP para o HEAP em pedaços de 256 KB (o `extract_zip` em C ainda é um bloco só)
 - `serve.py` / `web.config`: gzip + `X-UA-Compatible: IE=11` + cache
+- Depois do `HU_Init`, o DOSBox ia a `cycles=max` no loop gráfico e o IE parava de responder. Agora grava `dosbox-SVN.conf` com `cycles=3000`, `nosound=true`, `frameskip=2` e o canvas recusa WebGL
 
-A segunda visita, com JS em cache, costuma ser bem melhor.
+A segunda visita, com JS em cache, costuma ser bem melhor. O jogo fica mais lento (CPU capado) para a aba continuar viva.
 
 ## Como abrir
 
