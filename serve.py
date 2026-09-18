@@ -11,12 +11,17 @@ GZIP_EXT = (".js", ".css", ".html", ".htm", ".svg", ".txt", ".md")
 
 class Handler(SimpleHTTPRequestHandler):
     def end_headers(self):
+        path = getattr(self, "_ie_path", "")
+        if path.endswith((".html", ".htm")) or path.endswith("js-dos-api.js"):
+            self.send_header("Cache-Control", "no-cache")
+        else:
+            self.send_header("Cache-Control", "public, max-age=86400")
         self.send_header("X-UA-Compatible", "IE=11")
-        self.send_header("Cache-Control", "public, max-age=86400")
         SimpleHTTPRequestHandler.end_headers(self)
 
     def send_head(self):
         path = self.translate_path(self.path.split("?", 1)[0])
+        self._ie_path = path
         if os.path.isdir(path):
             return SimpleHTTPRequestHandler.send_head(self)
         ctype = self.guess_type(path)
