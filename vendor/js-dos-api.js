@@ -65,6 +65,7 @@ function(a,b){jQuery.fn[b]=function(d){return d?this.bind(b,d):this.trigger(b)}}
       });
       this.module.TOTAL_MEMORY = options.totalMemory || 67108864;
       this.module.TOTAL_STACK = options.totalStack || 2097152;
+      this.cycles = options.cycles || 10000;
       this.ui.setStartEnabled(false);
       this.ui.setPrefetch('Baixando o emulador em segundo plano...');
       this._prefetchAssets();
@@ -149,6 +150,7 @@ function(a,b){jQuery.fn[b]=function(d){return d?this.bind(b,d):this.trigger(b)}}
           _this._dosbox_main(_this, _this.executable);
           window.setTimeout(function() {
             _this.ui.hideLoader();
+            _this._captureInput();
           }, 800);
         }, 200);
       }
@@ -225,6 +227,34 @@ function(a,b){jQuery.fn[b]=function(d){return d?this.bind(b,d):this.trigger(b)}}
       return head.appendChild(script);
     };
 
+    Dosbox.prototype._captureInput = function() {
+      var canvas, trap;
+      canvas = this.module.canvas;
+      if (canvas) {
+        canvas.tabIndex = 0;
+        try {
+          canvas.focus();
+        } catch (ignore) {}
+      }
+      trap = function(e) {
+        var k;
+        e = e || window.event;
+        k = e.keyCode || e.which;
+        if (k === 8 || k === 9 || k === 32 || (k >= 33 && k <= 40)) {
+          if (e.preventDefault) {
+            e.preventDefault();
+          }
+          e.returnValue = false;
+          return false;
+        }
+      };
+      if (document.addEventListener) {
+        document.addEventListener('keydown', trap, false);
+      } else if (document.attachEvent) {
+        document.attachEvent('onkeydown', trap);
+      }
+    };
+
     Dosbox.prototype._blockWebGL = function(canvas) {
       var original;
       if (!canvas || canvas._ieBlockWebGL) {
@@ -258,22 +288,25 @@ function(a,b){jQuery.fn[b]=function(d){return d?this.bind(b,d):this.trigger(b)}}
         'output=surface',
         'autolock=false',
         'sensitivity=100',
+        'usescancodes=true',
         'waitonerror=false',
-        'priority=lower,lower',
+        'priority=normal,normal',
         '',
         '[dosbox]',
-        'machine=svga_s3',
+        'machine=vgaonly',
         'memsize=16',
         '',
         '[render]',
-        'frameskip=2',
+        'frameskip=0',
         'aspect=false',
         'scaler=none',
         '',
         '[cpu]',
         'core=normal',
         'cputype=auto',
-        'cycles=3000',
+        'cycles=' + (this.cycles || 10000),
+        'cycleup=500',
+        'cycledown=500',
         '',
         '[mixer]',
         'nosound=true',
@@ -307,7 +340,7 @@ function(a,b){jQuery.fn[b]=function(d){return d?this.bind(b,d):this.trigger(b)}}
       try {
         FS.writeFile('/home/web_user/.dosbox/dosbox-SVN.conf', conf);
         if (typeof console !== 'undefined' && console.log) {
-          console.log('Wrote IE dosbox.conf (cycles=3000, nosound)');
+          console.log('Wrote IE dosbox.conf (cycles=' + (this.cycles || 10000) + ', nosound)');
         }
       } catch (err) {
         if (typeof console !== 'undefined' && console.error) {

@@ -7,8 +7,15 @@
     <title>Web-Doom (IE11)</title>
     <link rel="icon" type="image/x-icon" href="https://www.iconarchive.com/download/i597/3xhumed/mega-games-pack-26/Doom-The-Ultimate-1.ico">
     <style type="text/css">
-      body { font-family: Tahoma, Arial, sans-serif; }
-      .dosbox-container { width: 640px; height: 400px; }
+      html, body { margin: 0; padding: 0; overflow: hidden; background: #111; color: #ddd; font-family: Tahoma, Arial, sans-serif; }
+      #wrap { text-align: center; padding: 8px; }
+      .dosbox-container { width: 640px; height: 400px; margin: 0 auto; }
+      .dosbox-canvas {
+        width: 640px !important;
+        height: 400px !important;
+        image-rendering: pixelated;
+        -ms-interpolation-mode: nearest-neighbor;
+      }
       .dosbox-container > .dosbox-overlay { background: url(https://js-dos.com/cdn/DOOM.png); }
       #ie-warning {
         display: none;
@@ -18,15 +25,18 @@
         background: #600;
         color: #fff;
       }
+      #hint { font-size: 12px; max-width: 640px; margin: 8px auto; }
     </style>
   </head>
   <body>
     <div id="ie-warning"></div>
-    <div id="dosbox" align="center"></div>
-    <br/>
-    <div align="center">
+    <div id="wrap">
+    <div id="dosbox"></div>
+    <div id="hint">
+      Clique no jogo para focar o teclado. Setas / Ctrl / Espaco. Ctrl+F12 acelera, Ctrl+F11 reduz CPU.
+      <br/>
       <button type="button" onclick="toggleFullscreen();">Tela cheia</button>
-      <p>Use HTTP com gzip (python serve.py). Depois do HU_Init o DOSBox fica limitado a 3000 cycles (sem som) para o IE não travar no loop gráfico.</p>
+    </div>
     </div>
 
     <script type="text/javascript" src="vendor/ie-shims.js"></script>
@@ -63,10 +73,17 @@
           return;
         }
 
+        var cycles = 10000;
+        var cycleMatch = /[?&]cycles=(\d+)/.exec(window.location.search || "");
+        if (cycleMatch) {
+          cycles = parseInt(cycleMatch[1], 10);
+        }
+
         window.dosbox = new Dosbox({
           id: "dosbox",
           archiveUrl: "https://js-dos.com/cdn/upload/DOOM-@evilution.zip",
           executable: "./DOOM/DOOM.EXE",
+          cycles: cycles,
           onload: function (dosbox) {
             dosbox.run();
           },
