@@ -293,7 +293,7 @@ function(a,b){jQuery.fn[b]=function(d){return d?this.bind(b,d):this.trigger(b)}}
         'priority=normal,normal',
         '',
         '[dosbox]',
-        'machine=vgaonly',
+        'machine=svga_s3',
         'memsize=16',
         '',
         '[render]',
